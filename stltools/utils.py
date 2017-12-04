@@ -1,10 +1,9 @@
 # file: utils.py
 # vim:fileencoding=utf-8
 #
-# Copyright © 2013,2014 R.F. Smith <rsmith@xs4all.nl>. All rights reserved.
+# Copyright © 2013-2015 R.F. Smith <rsmith@xs4all.nl>. All rights reserved.
 # Created: 2013-07-07 21:01:52  +0200
-# $Date$
-# $Revision$
+# Last modified: 2017-08-22 17:02:04 +0200
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -26,114 +25,71 @@
 # LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 # OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 # SUCH DAMAGE.
-
 """Utilities for stltools."""
 
-from __future__ import print_function, division
+import argparse
 import os.path
-from datetime import datetime
-import glob
-import sys
-import matrix as m
+import re
 
-__version__ = '3.3'
+__version__ = '5.0'
+
+
+class RotateAction(argparse.Action):
+    """Gather rotation options."""
+
+    def __init__(self, option_strings, dest, nargs=None, **kwargs):
+        """Create RotateAction object."""
+        if nargs is not None:
+            raise ValueError("nargs not allowed")
+        super(RotateAction, self).__init__(option_strings, dest,
+                                           **kwargs)
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        """Implement rotate option."""
+        rotations = getattr(namespace, 'rotations', None)
+        if not rotations:
+            rotations = []
+        rotations += [(option_string[1], values)]
+        setattr(namespace, 'rotations', rotations)
 
 
 def outname(inname, extension, addenum=''):
-    """Creates the name of the output filename based on the input filename.
+    """
+    Create the name of the output filename based on the input filename.
 
-    :inname: name + path of the input file
-    :extension: extension of the output file.
-    :addenum: string to append to filename
-    :returns: output file name.
+    Arguments:
+        inname: Name + path of the input file.
+        extension: Extension of the output file.
+        addenum: String to append to filename.
+
+    Returns:
+        Output file name.
     """
     rv = os.path.splitext(os.path.basename(inname))[0]
-    if rv.startswith('.') or rv.isspace():
-        raise ValueError("Invalid file name!")
+    rv = re.sub('^[\s\.]+|\s+$', '', rv)
+    rv = re.sub('\s+', '_', rv)
     if not extension.startswith('.'):
         extension = '.' + extension
     return rv + addenum + extension
 
 
-def skip(error, filename):
-    """Skip a file in case of an error
+def num2rgb(color):
+    """Convert a color value into r,b,g colors in the range 0−1.
 
-    :error: exception
-    :filename: name of file to skip
+    The input is an integer that is clamped to the range 0−0xFFFFFF.
+    This is then separated in red, green and blue components.
+
+    Arguments:
+        color: integer color value.
+
+    Returns:
+        (r, g, b) tuple where each component is in the range 0−1.
     """
-    print("Cannot read file: {}".format(error))
-    print("Skipping file '{}'".format(filename))
-
-
-def processargs(args, ext, use):
-    """Process the command-line arguments for a program that does coordinate
-    transformations.
-
-    :args: The command line arguments without the program name.
-    :ext: The extension of the output file.
-    :use: A function for printing a usage message.
-    :returns: A tuple containing the input file name, the output filename and
-    the transformation matrix.
-    """
-    validargs = ['x', 'y', 'z', 'X', 'Y', 'Z']
-    if len(args) < 1:
-        use()
-        sys.exit(0)
-    infile = args[0]
-    if len(args) < 2 or args[1] in validargs:
-        outfile = None
-        del args[:1]
-        outfile = outname(infile, ext)
-    else:
-        outfile = args[1]
-        del args[:2]
-    tr = m.I()
-    while len(args) > 1:
-        if not args[0] in validargs:
-            print("Unknown argument '{}' ignored.".format(args[0]))
-            del args[0]
-            continue
-        try:
-            ang = float(args[1])
-            if args[0] in ['x', 'X']:
-                add = m.rotx(ang)
-            elif args[0] in ['y', 'Y']:
-                add = m.roty(ang)
-            else:
-                add = m.rotx(ang)
-            del args[:2]
-            tr = m.concat(tr, add)
-        except:
-            print("Argument '{}' is not a number, ignored.".format(args[1]))
-            continue
-    return (infile, outfile, tr)
-
-
-def xpand(args):
-    """Expand command line arguments for operating systems incapable of doing
-    so.
-
-    :args: list of argument
-    :returns: expanded argument list
-    """
-    xa = []
-    for a in args:
-        xa += glob.glob(a)
-    return xa
-
-
-class Msg(object):
-    """Message printer"""
-
-    def __init__(self):
-        """@todo: to be defined1 """
-        self.start = datetime.now()
-
-    def say(self, *args):
-        """@todo: Docstring for message
-
-        :*args: @todo
-        :returns: @todo
-        """
-        delta = datetime.now() - self.start
-        print('['+str(delta)[:-4]+']:', *args)
+    if color > 0xFFFFFF:
+        color = 0xFFFFFF
+    elif color < 0:
+        color = 0
+    red = ((color & 0xFF0000) >> 16)/255
+    green = ((color & 0x00FF00) >> 8)/255
+    blue = (color & 0x0000FF)/255
+    return red, green, blue
